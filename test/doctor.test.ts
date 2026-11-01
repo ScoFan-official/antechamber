@@ -143,11 +143,42 @@ test("doctor warns for missing OpenChamber and mismatched or malformed settings"
   const { home, settings, ctx } = fixture(t);
   fs.unlinkSync(join(home, "openchamber"));
   fs.writeFileSync(settings, "{");
-  const report = doctor({ settings }, { ...ctx, platform: "darwin" });
+  const report = doctor({ settings }, { ...ctx, platform: "darwin", fs: { ...ctx.fs, accessSync: () => undefined } });
   assert.equal(report.exitCode, 0);
   assert.equal(report.checks.find((check) => check.name === "openchamber")?.status, "WARN");
   assert.equal(report.checks.find((check) => check.name === "openchamber-settings")?.status, "WARN");
-  assert.equal(report.checks.find((check) => check.name === "private-host-teardown")?.status, "WARN");
+  assert.equal(report.checks.find((check) => check.name === "private-host-teardown")?.status, "PASS");
+});
+
+test("doctor names the teardown mechanism of the platform it runs on", (t) => {
+  const { settings, ctx } = fixture(t);
+  const teardown = (report: ReturnType<typeof doctor>) =>
+    report.checks.find((check) => check.name === "private-host-teardown");
+
+  const darwin = doctor({ settings }, { ...ctx, platform: "darwin", fs: { ...ctx.fs, accessSync: () => undefined } });
+  assert.equal(teardown(darwin)?.status, "PASS");
+  assert.match(teardown(darwin)?.message ?? "", /ps \+ lsof/);
+
+  const missing = doctor(
+    { settings },
+    {
+      ...ctx,
+      platform: "darwin",
+      fs: {
+        ...ctx.fs,
+        accessSync: (path: Parameters<typeof fs.accessSync>[0], mode?: number) => {
+          if (path === "/bin/ps" || path === "/usr/sbin/lsof") throw new Error("EACCES");
+          return ctx.fs.accessSync(path, mode);
+        },
+      },
+    },
+  );
+  assert.equal(teardown(missing)?.status, "WARN");
+  assert.match(teardown(missing)?.message ?? "", /unavailable: \/bin\/ps, \/usr\/sbin\/lsof/);
+
+  const elsewhere = doctor({ settings }, { ...ctx, platform: "win32" });
+  assert.equal(teardown(elsewhere)?.status, "WARN");
+  assert.match(teardown(elsewhere)?.message ?? "", /not supported on win32/);
 });
 
 test("doctor reports auth presence without disclosing the password", (t) => {

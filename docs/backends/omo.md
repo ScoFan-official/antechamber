@@ -111,32 +111,35 @@ vs. OpenChamber's own `/api/git/diff`) and check
 Keep `difft` available as an explicit terminal command instead of a global
 `diff.external` if you also use OpenChamber's native Changes panel.
 
-## Private task-host teardown (Linux)
+## Private task-host teardown
 
 OmO can spawn detached, long-lived "task host" supervisor processes shared
 across subagent sessions. antechamber owns and tears down the ones it
 created (tracked per session as `connectorOwned`); it does not touch task
 hosts belonging to sessions it didn't create, or the shared LSP daemon.
 
-This teardown step needs:
+The mechanism depends on the platform:
 
-- Linux with pidfd support (`os.pidfd_open`, `signal.pidfd_send_signal`;
-  Linux 5.3+, Python 3.9+)
-- `python3` on `PATH`
+- Linux needs pidfd support (`os.pidfd_open`, `signal.pidfd_send_signal`;
+  Linux 5.3+, Python 3.9+) and `python3` on `PATH`.
+- macOS needs nothing beyond the system binaries: identities come from
+  `/bin/ps` and the working directory from `/usr/sbin/lsof`.
 
 On shutdown, antechamber locates its private task-host process group by the
 shard key derived from the session ID and working directory it created,
-confirms the process identity (PID plus start time, read from `/proc`), then
-signals only that verified group: SIGTERM, with an escalation to SIGKILL
-after a few seconds. It never does a broad command-line-based kill, and it
-never signals a process it can't positively identify as its own.
+confirms the process identity (PID plus start time), then signals only that
+verified group: SIGTERM, with an escalation to SIGKILL after a few seconds.
+It never does a broad command-line-based kill, and it never signals a process
+it can't positively identify as its own. Linux holds a pidfd, which stays
+valid across PID reuse. macOS re-reads the leader's start time before every
+signal and leaves a group alone once its leader has exited.
 
-If `python3` or pidfd support isn't available (non-Linux, or a Linux kernel
-too old), this teardown step is skipped with a warning instead of crashing
-antechamber's shutdown. The agent process itself (the one antechamber spawned
-directly) is still reaped normally; only the detached task-host supervisor
-cleanup is affected. See the [Platform notes](../../README.md#platform-notes)
-in the README.
+If the mechanism isn't available (no `python3` or pidfd on Linux, missing
+`ps`/`lsof` on macOS, or another platform entirely), this teardown step is
+skipped with a warning instead of crashing antechamber's shutdown. The agent
+process itself (the one antechamber spawned directly) is still reaped
+normally; only the detached task-host supervisor cleanup is affected. See the
+[Platform notes](../../README.md#platform-notes) in the README.
 
 ## Example: running OmO-backed antechamber as a systemd user service
 

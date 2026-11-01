@@ -280,12 +280,14 @@ inspected on October 13, 2026:
 After its RPC groups stop, the connector finds private supervisors by the
 exact shard basename derived from a newly created session ID plus that
 session's working directory. It requires a detached group leader and records
-Linux PID start times before signalling that group. Shutdown subscribes to
+its process start time before signalling that group: kernel start time from
+`/proc` on Linux, `ps lstart` on macOS. Shutdown subscribes to
 member death, sends SIGTERM, and escalates after five seconds with a ten-second
 deadline. It refuses to signal any observed member of `openchamber.service`.
 No broad command-line kill is used. The real-process regression proves that a
 different session's supervisor and engine in the same directory stay alive.
-Linux `/proc` and GNU `tail --pid` are required for this deployment's teardown.
+The regression harness itself needs Linux `/proc` and GNU `tail --pid`; the
+teardown path it exercises also runs on macOS through `ps` and `lsof`.
 
 The smoke assertion runs **before any harness termination**. Surviving RPC
 groups, private task hosts and unknown processes fail immediately. Only the

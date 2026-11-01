@@ -39,6 +39,45 @@ function processAlive(pid: number): boolean {
   }
 }
 
+/**
+ * Which mechanism this platform uses to stop private OmO task hosts. Linux opens pidfds through
+ * python3; macOS reads /bin/ps and /usr/sbin/lsof. Anything else has no teardown at all, and the
+ * check says so instead of warning about Linux support that was never applicable.
+ */
+function privateHostTeardown(ctx: CommandContext): { status: DoctorCheck["status"]; message: string } {
+  if (ctx.platform === "linux") {
+    const python = findPidfdPython(ctx.env, (candidate, args) => {
+      try {
+        ctx.exec(candidate, args);
+        return true;
+      } catch (error) {
+        if (!(error instanceof Error)) throw error;
+        return false;
+      }
+    });
+    return python === undefined
+      ? {
+          status: "WARN",
+          message: "requires python3 with working pidfd support (PATH, /bin/python3 or /usr/bin/python3)",
+        }
+      : { status: "PASS", message: `Linux pidfd support via ${python}` };
+  }
+  if (ctx.platform === "darwin") {
+    const missing = ["/bin/ps", "/usr/sbin/lsof"].filter((binary) => {
+      try {
+        ctx.fs.accessSync(binary, ctx.fs.constants.X_OK);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    return missing.length === 0
+      ? { status: "PASS", message: "ps + lsof (/bin/ps, /usr/sbin/lsof)" }
+      : { status: "WARN", message: `ps + lsof teardown unavailable: ${missing.join(", ")}` };
+  }
+  return { status: "WARN", message: `not supported on ${ctx.platform}; nothing is signalled` };
+}
+
 /** Checks capabilities with access/stat only, never creating state or config files. */
 export function doctor(
   options: SettingsOptions = {},
@@ -102,25 +141,8 @@ export function doctor(
       `pid ${server.pid} at ${server.url} runs ${server.version}${stale ? `; restart OpenChamber to run ${target}` : ""}`,
     );
   }
-  const python =
-    ctx.platform === "linux"
-      ? findPidfdPython(ctx.env, (candidate, args) => {
-          try {
-            ctx.exec(candidate, args);
-            return true;
-          } catch (error) {
-            if (!(error instanceof Error)) throw error;
-            return false;
-          }
-        })
-      : undefined;
-  add(
-    "private-host-teardown",
-    python === undefined ? "WARN" : "PASS",
-    python === undefined
-      ? "requires Linux and python3 with working pidfd support"
-      : `Linux pidfd support via ${python}`,
-  );
+  const teardown = privateHostTeardown(ctx);
+  add("private-host-teardown", teardown.status, teardown.message);
   const openchamber = resolveBinary("openchamber", ctx);
   if (openchamber === undefined) add("openchamber", "WARN", "openchamber is not on PATH");
   else {

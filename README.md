@@ -353,11 +353,21 @@ Hardening controls (full reference in [docs/configuration.md](docs/configuration
 
 ## Platform notes
 
-Linux is the primary supported platform. OmO's private task-host teardown
-(killing detached supervisor processes antechamber spawned) needs Linux
-pidfds (`os.pidfd_open`, Linux 5.3+) and `python3` on PATH; Node has no pidfd
-API. On other platforms that teardown step is skipped with one warning instead
-of crashing; antechamber never falls back to signalling numeric PIDs. macOS is untested.
+Linux and macOS are supported. OmO's private task-host teardown (killing
+detached supervisor processes antechamber spawned) identifies the same hosts
+on both: the parent-session shard, the supervisor entry point, the socket name
+and the working directory. Only the mechanism differs.
+
+- Linux opens pidfds (`os.pidfd_open`, Linux 5.3+) through `python3` on `PATH`,
+  so a PID recycled after the check can never be signalled.
+- macOS reads identities from `/bin/ps` and the working directory from
+  `/usr/sbin/lsof`. A group is signalled only while its leader (PID == PGID)
+  still carries the recorded start time; if the leader has already exited, the
+  group is left alone, because its ownership can no longer be confirmed.
+
+On any other platform that teardown step is skipped with one warning instead
+of crashing, and antechamber never falls back to signalling numeric PIDs
+without an identity check.
 
 ## Limitations / non-goals
 

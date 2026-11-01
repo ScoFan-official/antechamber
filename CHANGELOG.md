@@ -12,6 +12,12 @@ and this project uses [Semantic Versioning](https://semver.org/).
 - Tear down OmO's private task hosts on macOS. The connector finds the supervisors it started by session shard, entry
   point and working directory, re-checks the leader's identity before every signal, and escalates to `SIGKILL` after a
   grace window. A group whose leader has already gone is left alone, because its ownership can no longer be confirmed.
+
+### Changed
+
+- `antechamber doctor` names the teardown mechanism the platform actually uses: `pidfd` on Linux, `ps + lsof` on macOS,
+  and a warning only where teardown is unsupported. The README and `docs/backends/omo.md` no longer describe macOS as
+  untested.
   Linux keeps the pidfd path.
 
 ## [1.0.32] - 2026-10-29
