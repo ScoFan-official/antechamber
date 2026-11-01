@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ApprovalBridge, extensionUiRequestFrom, type ApprovalEvent } from "../src/approvals.js";
 import { AdapterServer } from "../src/server.js";
 import { formQuestionAnswer, toQuestionForm } from "../src/question-forms.js";
@@ -194,7 +195,7 @@ async function stream(url: string) {
 async function setup(t: test.TestContext) {
   const root = mkdtempSync(join(tmpdir(), "antechamber-questions-"));
   const settings = {
-    ANTECHAMBER_PI_BINARY: new URL("./fixtures/question-rpc.mjs", import.meta.url).pathname,
+    ANTECHAMBER_PI_BINARY: fileURLToPath(new URL("./fixtures/question-rpc.mjs", import.meta.url)),
     ANTECHAMBER_STATE_DIR: join(root, "state"),
     PI_CODING_AGENT_DIR: join(root, "pi"),
   };

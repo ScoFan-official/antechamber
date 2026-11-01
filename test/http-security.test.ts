@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { request, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test, { type TestContext } from "node:test";
 import { AdapterServer } from "../src/server.js";
 
@@ -125,7 +126,7 @@ for (const origin of [
 }
 
 test("OpenCode-parity rule accepts a passwordless POST /api/session from another loopback port", async (t) => {
-  setting(t, "ANTECHAMBER_PI_BINARY", new URL("./fixtures/turn-omo.mjs", import.meta.url).pathname);
+  setting(t, "ANTECHAMBER_PI_BINARY", fileURLToPath(new URL("./fixtures/turn-omo.mjs", import.meta.url)));
   const { server, directory } = await start(t);
   setting(t, "PI_CODING_AGENT_DIR", join(directory, "agent"));
   const origin = "http://127.0.0.1:5173";
