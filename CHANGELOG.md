@@ -7,6 +7,13 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Tear down OmO's private task hosts on macOS. The connector finds the supervisors it started by session shard, entry
+  point and working directory, re-checks the leader's identity before every signal, and escalates to `SIGKILL` after a
+  grace window. A group whose leader has already gone is left alone, because its ownership can no longer be confirmed.
+  Linux keeps the pidfd path.
+
 ## [1.0.32] - 2026-10-29
 
 ### Fixed

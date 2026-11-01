@@ -22,14 +22,15 @@ test("unsupported private-host teardown warns once without scanning or signallin
   t.mock.method(cp, "spawn", () => assert.fail("unsupported teardown must not spawn a helper"));
   t.mock.method(process, "kill", () => assert.fail("unsupported teardown must not signal numeric PIDs"));
   syncBuiltinESMExports();
-  for (const platform of ["darwin", "linux"] as const) {
+  // darwin has its own ps+lsof path now, so the unsupported case is a platform with neither /proc nor ps.
+  for (const platform of ["win32", "linux"] as const) {
     let probes = 0;
     const stop = createSessionHostStopper(platform, () => {
       probes++;
       return undefined;
     });
     await stop(new Map());
-    assert.equal(warning.mock.callCount(), platform === "darwin" ? 0 : 1);
+    assert.equal(warning.mock.callCount(), platform === "win32" ? 0 : 1);
     await stop(new Map([["owned", "/fixture"]]));
     await stop(new Map([["another-owned", "/fixture"]]));
     assert.equal(probes, platform === "linux" ? 1 : 0);
