@@ -252,6 +252,34 @@ test("an unresolved dispatched admission cannot abort the next admitted prompt",
   assert.equal(session.status.type, "idle");
 });
 
+test("an unresolved dispatched admission does not duplicate replies read mid-turn", { timeout: 30_000 }, async (t) => {
+  const { cold, id } = await crashDispatchedShell(t);
+  cold.messages(id);
+  await cold.reloadMessages(id);
+  const session = cold.get(id);
+  assert.ok(session?.pi);
+  const pi = session.pi;
+  await cold.prompt(id, "pending-turn", undefined, false, "msg_followup");
+  const finished = Promise.withResolvers<void>();
+  // OpenChamber re-reads the list while a reply streams; the reply's entry is on disk before agent_end binds it.
+  pi.onEvent((event) => {
+    if (event.type === "message_end") cold.messages(id);
+    if (event.type === "agent_idle") finished.resolve();
+  });
+  await pi.command({ type: "finish_pending_turn" });
+  await finished.promise;
+  const messages = cold.messages(id) ?? [];
+  const replies = messages.filter((message) =>
+    message.parts.some((part) => part.type === "text" && part.text === "completed followup"),
+  );
+  assert.equal(replies.length, 1, "the reply must not also appear under a restored id");
+  assert.doesNotMatch(replies[0]?.info.id ?? "", /_r\d+$/, "the live reply keeps its live id");
+  assert.deepEqual(
+    messages.slice(-2).map((message) => message.info.id),
+    ["msg_followup", replies[0]?.info.id],
+  );
+});
+
 test("an abandoned dispatched admission never returns after replacement refresh or restart", {
   timeout: 30_000,
 }, async (t) => {

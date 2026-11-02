@@ -1506,16 +1506,17 @@ export class SessionManager {
     });
   }
 
-  private ensureMessages(s: ManagedSession): OCMessageWithParts[] {
+  /** `reparse` rebuilds from the JSONL while `s.messages` stays visible, so the binder can reuse live ids. */
+  private ensureMessages(s: ManagedSession, reparse = false): OCMessageWithParts[] {
     if (this.subagents.owns(s.info.id)) return this.subagents.messages(s.info.id);
     if (this.monitors.owns(s.info.id)) return this.monitors.messages(s.info.id);
     if (s.pi !== undefined) delete s.historyFileSize;
     const dormantPath = s.pi === undefined ? s.restored?.piPath : undefined;
     const fileSize = dormantPath === undefined ? undefined : statSync(dormantPath, { throwIfNoEntry: false })?.size;
     const cachedFileSize = s.historyFileSize ?? s.tree.fileSize;
-    if (s.messages !== undefined && fileSize !== undefined && fileSize !== cachedFileSize)
+    if (!reparse && s.messages !== undefined && fileSize !== undefined && fileSize !== cachedFileSize)
       return this.refreshMessageCache(s, true);
-    if (s.messages === undefined) {
+    if (s.messages === undefined || reparse) {
       // A dormant session may have been continued by another OmO client since the last save.
       if (s.pi === undefined && s.restored !== undefined) followExternalAppends(s, s.restored.piPath);
       const admissions = s.tree.localShellTurns?.length;
@@ -1574,8 +1575,9 @@ export class SessionManager {
 
   private refreshMessageCache(s: ManagedSession, replaceNative = false): OCMessageWithParts[] {
     const previous = s.messages ?? [];
-    s.messages = undefined;
-    const native = this.ensureMessages(s);
+    // Keep the live list during the re-parse: with a pending shell turn the parse binds entries to visible
+    // messages, and an empty list would give every unbound live reply a second, restored `_r` copy.
+    const native = this.ensureMessages(s, true);
     if (replaceNative) {
       // Legacy compaction IDs can collide; retain every parsed native row.
       let index = 0;

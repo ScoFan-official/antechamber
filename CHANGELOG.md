@@ -7,6 +7,14 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Stop showing replies twice, and keep new messages and `!` shell commands at the end of the conversation, in a
+  session that has a shell command OmO never reported back (for example one stopped by the old one-minute deadline).
+  Every read of the conversation re-parsed the session file without the live replies, so each reply read mid-turn
+  gained a second, restored copy, and those copies piled up after newer messages. Restart OpenChamber's adapter to
+  clear copies already in memory.
+
 ## [1.0.32] - 2026-10-29
 
 ### Fixed
