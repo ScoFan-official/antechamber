@@ -294,6 +294,18 @@ export class SessionManager {
       ...(parentID !== undefined ? { parentID } : {}),
     };
 
+    // OmO writes its session file before it answers get_state, so a session list in that window can adopt the file
+    // as a dormant session under the md5 id. Child tasks would then attach to that twin, not to this session.
+    if (piSessionId !== undefined) {
+      for (const [key, twin] of this.sessions) {
+        if (twin.pi !== undefined || twin.restored?.piSessionId !== piSessionId) continue;
+        this.sessions.delete(key);
+        if (this.store.get(key) !== undefined) this.store.remove(key);
+        if (key !== info.id)
+          this.emit(twin.info.directory, { type: "session.deleted", properties: { info: twin.info } });
+      }
+    }
+
     const managed: ManagedSession = {
       tree: { messageEntries: {} },
       titleSource: title?.trim() ? "user" : "fallback",

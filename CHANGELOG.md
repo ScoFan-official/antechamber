@@ -7,6 +7,12 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Show a session's subagents under that session. A session list that OpenChamber sent while a new session's agent
+  was still starting could adopt the agent's file as a second copy of the session, and subagents started
+  later were filed under that copy, so the session showed none of them.
+
 ## [1.0.33] - 2026-11-02
 
 ### Fixed
