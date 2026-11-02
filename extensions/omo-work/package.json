@@ -1,6 +1,6 @@
 {
   "name": "antechamber-omo-work",
-  "version": "1.0.33",
+  "version": "1.0.34",
   "description": "OpenChamber 2.x Work Status section: OmO todo phases, monitors, eval cells and background work of the current session",
   "private": true,
   "type": "module",

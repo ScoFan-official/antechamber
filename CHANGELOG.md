@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.34] - 2026-11-02
+
 ### Fixed
 
 - Show a session's subagents under that session. A session list that OpenChamber sent while a new session's agent
