@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.33] - 2026-11-02
+
 ### Fixed
 
 - Stop showing replies twice, and keep new messages and `!` shell commands at the end of the conversation, in a

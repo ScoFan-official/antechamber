@@ -1,6 +1,6 @@
 {
   "name": "antechamber-omo-compat",
-  "version": "1.0.32",
+  "version": "1.0.33",
   "description": "OpenChamber extension: displays OmO tool calls the way OmO means them when OpenChamber runs on antechamber",
   "private": true,
   "type": "module",
