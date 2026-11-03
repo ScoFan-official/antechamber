@@ -3,6 +3,7 @@ import test from "node:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { ApprovalBridge, extensionUiRequestFrom, parsePermissionTitle, type ApprovalEvent } from "../src/approvals.js";
 import { PiRpcClient } from "../src/pi-rpc.js";
 import { AdapterServer } from "../src/server.js";
@@ -219,7 +220,7 @@ test("v2 SSE permission uses native action resources source and event type", () 
 test("real RPC transport forwards blocking requests without auto-cancellation", { timeout: 20000 }, async (t) => {
   const pi = new PiRpcClient({
     cwd: tmpdir(),
-    piBinary: new URL("./fixtures/approval-rpc.mjs", import.meta.url).pathname,
+    piBinary: fileURLToPath(new URL("./fixtures/approval-rpc.mjs", import.meta.url)),
   });
   t.after(() => bounded(pi.dispose(), "RPC process teardown", 10000));
   try {
@@ -246,7 +247,7 @@ test("HTTP v1 v2 lists replies malformed input unknown IDs and abort", { timeout
   const root = mkdtempSync(join(tmpdir(), "approval-http-"));
   const keys = ["ANTECHAMBER_PI_BINARY", "ANTECHAMBER_STATE_DIR", "PI_CODING_AGENT_DIR"] as const;
   const previous = keys.map((key) => process.env[key]);
-  process.env.ANTECHAMBER_PI_BINARY = new URL("./fixtures/approval-rpc.mjs", import.meta.url).pathname;
+  process.env.ANTECHAMBER_PI_BINARY = fileURLToPath(new URL("./fixtures/approval-rpc.mjs", import.meta.url));
   process.env.ANTECHAMBER_STATE_DIR = root;
   process.env.PI_CODING_AGENT_DIR = root;
   const server = new AdapterServer({ host: "127.0.0.1", port: 0, defaultDirectory: root });
@@ -367,7 +368,7 @@ test("HTTP v1 v2 lists replies malformed input unknown IDs and abort", { timeout
 
 test("real session pending-interaction hook prevents idle reaping until the reply", { timeout: 20000 }, async (t) => {
   const root = mkdtempSync(join(tmpdir(), "approval-reaper-"));
-  const binary = new URL("./fixtures/approval-rpc.mjs", import.meta.url).pathname;
+  const binary = fileURLToPath(new URL("./fixtures/approval-rpc.mjs", import.meta.url));
   const previous = process.env.ANTECHAMBER_PI_BINARY;
   process.env.ANTECHAMBER_PI_BINARY = binary;
   let time = 0;

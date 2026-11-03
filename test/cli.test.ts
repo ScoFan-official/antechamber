@@ -5,9 +5,10 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { type TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 import { ADAPTER_VERSION } from "../src/version.js";
 
-const cli = new URL("../src/cli.ts", import.meta.url);
+const cli = fileURLToPath(new URL("../src/cli.ts", import.meta.url));
 const manifest = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 
 function environment(t: TestContext) {
@@ -18,7 +19,7 @@ function environment(t: TestContext) {
 
 for (const flag of ["--version", "-v"]) {
   test(`${flag} preserves the OpenChamber version probe`, (t) => {
-    const result = spawnSync(process.execPath, ["--import", "tsx", cli.pathname, flag], {
+    const result = spawnSync(process.execPath, ["--import", "tsx", cli, flag], {
       env: environment(t),
       encoding: "utf8",
       timeout: 5000,
@@ -29,7 +30,7 @@ for (const flag of ["--version", "-v"]) {
 }
 
 test("version prints the package version without starting a server", (t) => {
-  const result = spawnSync(process.execPath, ["--import", "tsx", cli.pathname, "version"], {
+  const result = spawnSync(process.execPath, ["--import", "tsx", cli, "version"], {
     env: environment(t),
     encoding: "utf8",
     timeout: 2000,
@@ -41,7 +42,7 @@ test("version prints the package version without starting a server", (t) => {
 
 for (const command of ["help", "--help"]) {
   test(`${command} exits without starting a server`, (t) => {
-    const result = spawnSync(process.execPath, ["--import", "tsx", cli.pathname, command], {
+    const result = spawnSync(process.execPath, ["--import", "tsx", cli, command], {
       env: environment(t),
       encoding: "utf8",
       timeout: 5000,
@@ -53,7 +54,7 @@ for (const command of ["help", "--help"]) {
 
 test("doctor --json exits nonzero for a missing backend without creating directories", (t) => {
   const env = environment(t);
-  const result = spawnSync(process.execPath, ["--import", "tsx", cli.pathname, "doctor", "--json"], {
+  const result = spawnSync(process.execPath, ["--import", "tsx", cli, "doctor", "--json"], {
     env: { ...env, PATH: env.HOME, ANTECHAMBER_PI_BINARY: "missing-backend" },
     encoding: "utf8",
     timeout: 5000,
@@ -69,14 +70,10 @@ test("doctor --json exits nonzero for a missing backend without creating directo
 });
 
 test("serve preserves the OpenChamber listening line and clean shutdown", { timeout: 10000 }, async (t) => {
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", cli.pathname, "serve", "--hostname", "127.0.0.1", "--port", "0"],
-    {
-      env: environment(t),
-      stdio: ["ignore", "pipe", "pipe"],
-    },
-  );
+  const child = spawn(process.execPath, ["--import", "tsx", cli, "serve", "--hostname", "127.0.0.1", "--port", "0"], {
+    env: environment(t),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   t.after(() => {
     if (child.exitCode === null) child.kill("SIGKILL");
   });

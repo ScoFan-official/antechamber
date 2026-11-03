@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test, { type TestContext } from "node:test";
 import { AdapterServer } from "../src/server.js";
 
@@ -41,7 +42,7 @@ test("R-023: v2 session creation rejects a missing directory before spawning an 
   const previousBinary = process.env.ANTECHAMBER_PI_BINARY;
   const previousAgentDir = process.env.PI_CODING_AGENT_DIR;
   const { root, url } = await startServer(t);
-  process.env.ANTECHAMBER_PI_BINARY = new URL("./fixtures/turn-omo.mjs", import.meta.url).pathname;
+  process.env.ANTECHAMBER_PI_BINARY = fileURLToPath(new URL("./fixtures/turn-omo.mjs", import.meta.url));
   process.env.PI_CODING_AGENT_DIR = join(root, "agent");
   t.after(() => {
     if (previousBinary === undefined) delete process.env.ANTECHAMBER_PI_BINARY;

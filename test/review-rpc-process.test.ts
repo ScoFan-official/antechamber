@@ -4,6 +4,7 @@ import { once } from "node:events";
 import { syncBuiltinESMExports } from "node:module";
 import { PassThrough } from "node:stream";
 import test, { type TestContext } from "node:test";
+import { fileURLToPath } from "node:url";
 import { PiRpcClient, type ProcessTable } from "../src/pi-rpc.js";
 
 test("R-019: a correlated response cannot satisfy a different command", async (t) => {
@@ -60,7 +61,7 @@ async function startReviewServer(t: import("node:test").TestContext, fixture: st
 }
 
 test("R-003: stdin EPIPE rejects the command without terminating its host process", { timeout: 10_000 }, async () => {
-  const fixture = new URL("./fixtures/review-rpc-stdin-epipe.mjs", import.meta.url).pathname;
+  const fixture = fileURLToPath(new URL("./fixtures/review-rpc-stdin-epipe.mjs", import.meta.url));
   const child = childProcess.spawn(process.execPath, ["--import", "tsx", fixture], {
     cwd: process.cwd(),
     stdio: ["ignore", "pipe", "pipe"],
@@ -100,7 +101,7 @@ test("R-004: private-host shutdown reaches an owned supervisor started through a
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   const socket = join(linked, `p-${createHash("sha256").update(`p:${owner}`).digest("hex").slice(0, 16)}.sock`);
-  const fixture = new URL("./fixtures/fake-omo-host.mjs", import.meta.url).pathname;
+  const fixture = fileURLToPath(new URL("./fixtures/fake-omo-host.mjs", import.meta.url));
   const child = childProcess.spawn(process.execPath, [fixture, "--internal-rpc-host-supervisor", "--socket", socket], {
     cwd: linked,
     detached: true,
@@ -312,7 +313,7 @@ test("R-018: stdout EOF rejects later RPC commands before writing stdin", async 
 
 test("R-020: a failed catalog load is retried by the next provider request", { timeout: 10_000 }, async (t) => {
   const { join } = await import("node:path");
-  const fixture = new URL("./fixtures/review-rpc-catalog.mjs", import.meta.url).pathname;
+  const fixture = fileURLToPath(new URL("./fixtures/review-rpc-catalog.mjs", import.meta.url));
   const { root, url } = await startReviewServer(t, fixture);
   const previousCountFile = process.env.REVIEW_RPC_CATALOG_COUNT_FILE;
   process.env.REVIEW_RPC_CATALOG_COUNT_FILE = join(root, "catalog-attempts");
@@ -333,7 +334,7 @@ test("R-011: first prompt_async reuses the optimistic user identity without a du
   timeout: 10_000,
 }, async (t) => {
   const { openEvents } = await import("./bug-harness.js");
-  const fixture = new URL("./fixtures/turn-omo.mjs", import.meta.url).pathname;
+  const fixture = fileURLToPath(new URL("./fixtures/turn-omo.mjs", import.meta.url));
   const { server, url } = await startReviewServer(t, fixture);
   const createdResponse = await fetch(`${url}/session`, { method: "POST", body: "{}" });
   assert.equal(createdResponse.status, 200);
