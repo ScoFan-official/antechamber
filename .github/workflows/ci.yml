@@ -43,3 +43,16 @@ jobs:
           assert.ok(!paths.some((path) => /^(test|contrib)\//.test(path)),
             "package must not contain test/ or contrib/");
           NODE
+
+  # Runs the darwin process-table and teardown paths against the real /bin/ps and lsof.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
