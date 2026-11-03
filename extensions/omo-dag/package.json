@@ -1,6 +1,6 @@
 {
   "name": "antechamber-omo-graph",
-  "version": "1.0.34",
+  "version": "1.0.35",
   "description": "OpenChamber extension: live, interactive graph of the OmO sub-agents behind the current session",
   "private": true,
   "type": "module",

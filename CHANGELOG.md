@@ -7,6 +7,10 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.0.35] - 2026-11-03
+
+- test: resolve fixture paths with fileURLToPath (#86)
+
 ## [1.0.34] - 2026-11-02
 
 ### Fixed
