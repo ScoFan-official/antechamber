@@ -102,7 +102,7 @@ ANTECHAMBER_PI_BINARY="$(command -v omo)" npm run omo-smoke   # live, costs toke
 npm run build && npm run replay -- [--session ses_x]   # real sessions in a real OpenChamber; no tokens, local only
 antechamber doctor                       # includes installed vs latest vs running adapter versions
 ```
-CI (Node 22.x and 24.x) runs typecheck, lint, format:check, test and build, then asserts `npm pack` ships `dist/cli.js` and the built extensions, and no `test/`, `contrib/` or extension sources/tests.
+CI (Node 22.x and 24.x) runs typecheck, lint, format:check, test and build, then asserts `npm pack` ships `dist/cli.js` and the built extensions, and no `test/`, `contrib/` or extension sources/tests. A `macos-latest` job (Node 24) runs typecheck and test so the darwin process paths meet the real `ps`.
 
 ## NOTES
 - `bin/opencode-antechamber` runs `dist/cli.js`, so a fresh checkout needs `npm run build` before OpenChamber can launch it.

@@ -12,10 +12,13 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { StringDecoder } from "node:string_decoder";
 import { EventEmitter } from "node:events";
 import { randomUUID } from "node:crypto";
-import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { constants as osConstants } from "node:os";
 import { systemClock, type LifecycleClock } from "./lifecycle.js";
 import { agentBinary, envSetting } from "./config.js";
+import { createProcessTable, type ProcessTable } from "./proc-table.js";
+
+export type { ProcessIdentity, ProcessTable } from "./proc-table.js";
 
 export interface PiRpcCommand {
   id?: string;
@@ -61,45 +64,7 @@ function rankAboveAdapterForOom(pid: number): void {
   }
 }
 
-/** A process's group and kernel start time: with the PID, the identity that survives PID reuse checks. */
-interface ProcessIdentity {
-  readonly pid: number;
-  readonly group: number;
-  readonly start: string;
-}
-
-/** Reads process identities so disposal can tell owned survivors from a reused PID. */
-export interface ProcessTable {
-  identity(pid: number): ProcessIdentity | undefined;
-  groupMembers(group: number): ProcessIdentity[];
-}
-
-// Linux /proc. Any read failure (gone, no permission, no /proc) means the identity cannot be
-// verified, and an unverifiable process is never signalled: fail closed.
-const procTable: ProcessTable = {
-  identity(pid) {
-    let stat: string;
-    try {
-      stat = readFileSync(`/proc/${pid}/stat`, "utf8");
-    } catch {
-      return undefined;
-    }
-    const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
-    return { pid, group: Number(fields[2]), start: fields[19] ?? "" };
-  },
-  groupMembers(group) {
-    let names: string[];
-    try {
-      names = readdirSync("/proc");
-    } catch {
-      return [];
-    }
-    return names
-      .filter((name) => /^\d+$/.test(name))
-      .flatMap((name) => procTable.identity(Number(name)) ?? [])
-      .filter((member) => member.group === group);
-  },
-};
+const procTable: ProcessTable = createProcessTable();
 
 /** Why the agent stopped without antechamber disposing it on purpose (eviction, delete, shutdown). */
 export type PiStopReason =

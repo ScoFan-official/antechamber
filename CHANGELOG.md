@@ -7,6 +7,13 @@ and this project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Clean up after the agent on macOS. Disposal now records the agent's process group and re-identifies each member
+  before signalling it, so child processes that outlive the agent are stopped instead of being left behind. Linux
+  keeps reading `/proc`; macOS reads `/bin/ps`, because Node has neither `/proc` nor pidfd there. A process that has
+  already exited (zombie) never counts as a survivor.
+
 ## [1.0.35] - 2026-11-03
 
 - test: resolve fixture paths with fileURLToPath (#86)
