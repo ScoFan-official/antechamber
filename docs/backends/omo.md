@@ -111,7 +111,7 @@ vs. OpenChamber's own `/api/git/diff`) and check
 Keep `difft` available as an explicit terminal command instead of a global
 `diff.external` if you also use OpenChamber's native Changes panel.
 
-## Private task-host teardown (Linux)
+## Private task-host teardown
 
 OmO can spawn detached, long-lived "task host" supervisor processes shared
 across subagent sessions. antechamber owns and tears down the ones it
@@ -131,8 +131,22 @@ signals only that verified group: SIGTERM, with an escalation to SIGKILL
 after a few seconds. It never does a broad command-line-based kill, and it
 never signals a process it can't positively identify as its own.
 
-If `python3` or pidfd support isn't available (non-Linux, or a Linux kernel
-too old), this teardown step is skipped with a warning instead of crashing
+On macOS there is no pidfd, so the same ownership rule is read from
+`/bin/ps` (PID, group, `lstart` start time, argv) and `/usr/sbin/lsof` (working
+directory): a live group leader running the supervisor entry point, whose
+`--socket` value is the shard of a session antechamber created and whose working
+directory is that session's directory. Every member of an owned group is
+recorded from that one scan. Each SIGTERM, and each SIGKILL after five seconds,
+goes to one PID, and only after a fresh `ps` scan still shows the recorded
+group and start time. That leaves a short window between the scan and the
+signal in which a PID could be recycled, the same window the agent's own
+disposal (`PiRpcClient.dispose()`) accepts on every platform. A member that
+outlives its supervisor is still stopped, and members that survive SIGKILL are
+reported as a shutdown error. If `ps` or `lsof` cannot confirm a process, it is
+not signalled.
+
+If `python3` or pidfd support isn't available (a Linux kernel too old, or a
+platform that is neither Linux nor macOS), this teardown step is skipped with a warning instead of crashing
 antechamber's shutdown. The agent process itself (the one antechamber spawned
 directly) is still reaped normally; only the detached task-host supervisor
 cleanup is affected. See the [Platform notes](../../README.md#platform-notes)

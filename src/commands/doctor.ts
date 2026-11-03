@@ -114,13 +114,22 @@ export function doctor(
           }
         })
       : undefined;
-  add(
-    "private-host-teardown",
-    python === undefined ? "WARN" : "PASS",
-    python === undefined
-      ? "requires Linux and python3 with working pidfd support"
-      : `Linux pidfd support via ${python}`,
-  );
+  if (ctx.platform === "darwin") {
+    const tools = ["/bin/ps", "/usr/sbin/lsof"];
+    const missing = tools.filter((tool) => !ctx.fs.existsSync(tool));
+    add(
+      "private-host-teardown",
+      missing.length === 0 ? "PASS" : "WARN",
+      missing.length === 0 ? `macOS teardown via ${tools.join(" and ")}` : `requires ${missing.join(" and ")}`,
+    );
+  } else
+    add(
+      "private-host-teardown",
+      python === undefined ? "WARN" : "PASS",
+      python === undefined
+        ? "requires Linux and python3 with working pidfd support"
+        : `Linux pidfd support via ${python}`,
+    );
   const openchamber = resolveBinary("openchamber", ctx);
   if (openchamber === undefined) add("openchamber", "WARN", "openchamber is not on PATH");
   else {

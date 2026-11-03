@@ -106,7 +106,7 @@ CI (Node 22.x and 24.x) runs typecheck, lint, format:check, test and build, then
 
 ## NOTES
 - `bin/opencode-antechamber` runs `dist/cli.js`, so a fresh checkout needs `npm run build` before OpenChamber can launch it.
-- Teardown of detached OmO task hosts is Linux-only (pidfd via Python, `/proc`, GNU `tail --pid`). On other platforms it warns and skips.
+- Teardown of detached OmO task hosts uses pidfd via Python and `/proc` on Linux, and `/bin/ps` plus `/usr/sbin/lsof` with per-PID identity re-checks on macOS. On other platforms it warns and skips.
 - `reference/` (gitignored) holds shallow clones of openchamber and pi-mono for protocol lookups. It is not part of the build and Biome ignores it.
 - `.omo/` is gitignored and Biome-ignored.
 - The route smoke reads the maintained static route table in `docs/api-surface.md`; parameterized routes are documented separately.

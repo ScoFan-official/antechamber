@@ -354,10 +354,13 @@ Hardening controls (full reference in [docs/configuration.md](docs/configuration
 ## Platform notes
 
 Linux is the primary supported platform. OmO's private task-host teardown
-(killing detached supervisor processes antechamber spawned) needs Linux
-pidfds (`os.pidfd_open`, Linux 5.3+) and `python3` on PATH; Node has no pidfd
-API. On other platforms that teardown step is skipped with one warning instead
-of crashing; antechamber never falls back to signalling numeric PIDs. macOS is untested.
+(killing detached supervisor processes antechamber spawned) uses Linux
+pidfds (`os.pidfd_open`, Linux 5.3+) and `python3` on PATH, because Node has no pidfd
+API; on Linux it never signals a numeric PID. macOS has no pidfd, so there it
+reads `/bin/ps` and `/usr/sbin/lsof` and signals each owned process by PID after
+re-checking its process group and start time (see
+[the OmO backend notes](docs/backends/omo.md#private-task-host-teardown)). CI runs the suite on
+macOS. On other platforms that teardown step is skipped with one warning instead of crashing.
 
 ## Limitations / non-goals
 

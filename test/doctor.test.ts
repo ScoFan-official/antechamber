@@ -143,11 +143,22 @@ test("doctor warns for missing OpenChamber and mismatched or malformed settings"
   const { home, settings, ctx } = fixture(t);
   fs.unlinkSync(join(home, "openchamber"));
   fs.writeFileSync(settings, "{");
-  const report = doctor({ settings }, { ...ctx, platform: "darwin" });
+  const withoutLsof = { ...fs, existsSync: (path: fs.PathLike) => path !== "/usr/sbin/lsof" && fs.existsSync(path) };
+  const report = doctor({ settings }, { ...ctx, platform: "darwin", fs: withoutLsof });
   assert.equal(report.exitCode, 0);
   assert.equal(report.checks.find((check) => check.name === "openchamber")?.status, "WARN");
   assert.equal(report.checks.find((check) => check.name === "openchamber-settings")?.status, "WARN");
-  assert.equal(report.checks.find((check) => check.name === "private-host-teardown")?.status, "WARN");
+  const teardown = report.checks.find((check) => check.name === "private-host-teardown");
+  assert.equal(teardown?.status, "WARN");
+  assert.match(teardown?.message ?? "", /\/usr\/sbin\/lsof/);
+});
+
+test("doctor passes macOS private-host teardown when ps and lsof exist", (t) => {
+  const { settings, ctx } = fixture(t);
+  const tools = new Set(["/bin/ps", "/usr/sbin/lsof"]);
+  const withTools = { ...fs, existsSync: (path: fs.PathLike) => tools.has(String(path)) || fs.existsSync(path) };
+  const report = doctor({ settings }, { ...ctx, platform: "darwin", fs: withTools });
+  assert.equal(report.checks.find((check) => check.name === "private-host-teardown")?.status, "PASS");
 });
 
 test("doctor reports auth presence without disclosing the password", (t) => {

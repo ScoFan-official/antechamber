@@ -82,10 +82,7 @@ test("R-003: stdin EPIPE rejects the command without terminating its host proces
   assert.match(stdout, /EPIPE_REJECTED/);
 });
 
-test("R-004: private-host shutdown reaches an owned supervisor started through a directory symlink", {
-  skip: process.platform !== "linux",
-  timeout: 20_000,
-}, async (t) => {
+async function stopOwnedFixtureHost(t: TestContext, env: NodeJS.ProcessEnv = {}): Promise<void> {
   const { createHash, randomUUID } = await import("node:crypto");
   const { mkdirSync, mkdtempSync, rmSync, symlinkSync } = await import("node:fs");
   const { tmpdir } = await import("node:os");
@@ -105,6 +102,7 @@ test("R-004: private-host shutdown reaches an owned supervisor started through a
   const child = childProcess.spawn(process.execPath, [fixture, "--internal-rpc-host-supervisor", "--socket", socket], {
     cwd: linked,
     detached: true,
+    env: { ...process.env, ...env },
     stdio: ["ignore", "pipe", "pipe"],
   });
   trackDetachedFixture(t, child);
@@ -115,9 +113,25 @@ test("R-004: private-host shutdown reaches an owned supervisor started through a
 
   await stopSessionHosts(new Map([[owner, linked]]));
 
+  // The supervisor is this process's child: it stays a zombie until Node reaps it.
+  if (child.exitCode === null && child.signalCode === null)
+    await once(child, "exit", { signal: AbortSignal.timeout(5_000) });
   assert.throws(() => process.kill(identity.pid, 0), { code: "ESRCH" });
   assert.throws(() => process.kill(identity.enginePid, 0), { code: "ESRCH" });
-});
+}
+
+// Real ps/lsof on macOS and /proc + pidfd on Linux; the injected unit tests cannot prove either.
+const realTeardown = { skip: !["linux", "darwin"].includes(process.platform), timeout: 30_000 };
+
+test(
+  "R-004: private-host shutdown reaches an owned supervisor started through a directory symlink",
+  realTeardown,
+  (t) => stopOwnedFixtureHost(t),
+);
+
+test("R-004b: private-host shutdown kills an engine that outlives its supervisor", realTeardown, (t) =>
+  stopOwnedFixtureHost(t, { FAKE_OMO_HOST_ORPHAN_ENGINE: "1" }),
+);
 
 test("R-005: disposing an exited child never signals its former numeric process group", async (t) => {
   const stdin = new PassThrough();

@@ -30,7 +30,7 @@ cli.ts (parseArgs, lazy import per command; no command framework)
 | OmO Work section data | `work-status.ts` | `/antechamber/work-status`, bearer token from the run record |
 | Todos | `todo-bridge.ts` | todo tool calls -> OpenCode todo state |
 | Slash commands, shell, compact | `session-commands.ts` | |
-| Task-host teardown | `session-hosts.ts`, `pidfd.ts` | Linux only |
+| Task-host teardown | `session-hosts.ts`, `pidfd.ts`, `proc-table-darwin.ts` | Linux pidfd; macOS `ps` + `lsof` |
 | Auth, origin, CORS, error JSON | `http.ts` | |
 | Env settings | `config.ts` | `envSetting(name)` |
 | CLI setup/doctor | `commands/` | `context.ts` injects fs/env/exec for tests |

@@ -29,7 +29,7 @@ One line per module in `src/`:
 | `pi-event-translation.ts` | Shared pi message/part helpers and live event translation with explicit manager services |
 | `session-store.ts` | Session registry persistence (directory, ancestry, metadata, model, tree, and part-ID mappings) |
 | `session-tree.ts` | Agent session-tree parsing (JSONL entries, fork/revert navigation) |
-| `session-hosts.ts` | Linux pidfd-based teardown of detached OmO task-host processes antechamber owns |
+| `session-hosts.ts` | Teardown of detached OmO task-host processes antechamber owns: Linux pidfd, macOS `ps` + `lsof` |
 | `session-commands.ts` | Slash commands, shell execution, compaction, share (unsupported) |
 | `session-diff.ts` | `GET /session/:id/diff` unified-patch computation |
 | `pi-rpc.ts` | Low-level pi/OmO RPC subprocess management: spawn, JSONL framing, capability passthrough, request correlation |

@@ -58,6 +58,28 @@ function alive(entry: PsEntry): boolean {
   return !entry.state.startsWith("Z");
 }
 
+/** One `ps -A` row with its state and argv, for callers that match processes by command line. */
+export interface PsProcess extends ProcessIdentity {
+  readonly state: string;
+  readonly args: string;
+}
+
+// Under LC_ALL=C, lstart is a fixed 24-character field, so argv starts right after it even when it
+// contains spaces.
+const PS_ARGS_LINE = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.{24})\s?(.*)$/;
+
+/** Every live (non-zombie) process with its argv. Throws when `ps` fails, so the caller decides. */
+export function listDarwinProcesses(run: PsRunner = runPs): PsProcess[] {
+  return run(["-ww", "-o", `${PS_COLUMNS},args=`, "-A"])
+    .split("\n")
+    .flatMap((line) => {
+      const match = PS_ARGS_LINE.exec(line);
+      if (match === null) return [];
+      const entry = { pid: Number(match[1]), group: Number(match[2]), state: match[3] ?? "", start: match[4] ?? "" };
+      return alive(entry) ? [{ ...entry, args: match[5] ?? "" }] : [];
+    });
+}
+
 function toIdentity(entry: PsEntry): ProcessIdentity {
   return { pid: entry.pid, group: entry.group, start: entry.start };
 }

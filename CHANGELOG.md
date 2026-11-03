@@ -14,10 +14,11 @@ and this project uses [Semantic Versioning](https://semver.org/).
   keeps reading `/proc`; macOS reads `/bin/ps`, because Node has neither `/proc` nor pidfd there. A process that has
   already exited (zombie) never counts as a survivor.
 
-- Tear down OmO's private task hosts on macOS. The connector finds the supervisors it started by session shard, entry
-  point and working directory, re-checks the leader's identity before every signal, and escalates to `SIGKILL` after a
-  grace window. A group whose leader has already gone is left alone, because its ownership can no longer be confirmed.
-  Linux keeps the pidfd path.
+- Tear down OmO's private task hosts on macOS. The connector finds the supervisors it started by the `--socket` session
+  shard, entry point and working directory, records every process in their groups, and signals each one by PID only
+  after re-checking its group and start time, escalating to `SIGKILL` after a grace window. A process that outlives its
+  supervisor is still stopped. `antechamber doctor` reports the check as PASS when `/bin/ps` and `/usr/sbin/lsof`
+  exist. Linux keeps the pidfd path.
 
 ## [1.0.35] - 2026-11-03
 

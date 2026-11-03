@@ -4,6 +4,7 @@ import { once } from "node:events";
 import { closeSync, constants, openSync, readFileSync, readdirSync, readlinkSync, realpathSync } from "node:fs";
 import { basename } from "node:path";
 import { findPidfdPython } from "./pidfd.js";
+import { listDarwinProcesses, runPs, type PsRunner } from "./proc-table-darwin.js";
 
 /** How long a darwin teardown waits after SIGTERM before escalating, and how often it re-reads the table. */
 const HOST_TERM_GRACE_MS = 5_000;
@@ -34,38 +35,15 @@ export function createSessionHostStopper(
 
 export const stopSessionHosts = createSessionHostStopper();
 
-/** `args` is appended to the identity columns: lstart is a fixed-width 24-character field, then argv. */
-const PS_HOST_COLUMNS = "pid=,pgid=,stat=,lstart=,args=";
-const PS_HOST_LINE = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.{24})\s(.*)$/;
-
-interface HostRow {
-  readonly pid: number;
-  readonly group: number;
-  readonly state: string;
-  readonly start: string;
-  readonly args: string;
-}
-
 /** Injected so the darwin path can be tested without running ps, lsof or a signal. */
 export interface DarwinHostDependencies {
-  readonly run: (args: readonly string[]) => string;
+  readonly run: PsRunner;
   readonly cwdOf: (pid: number) => string | undefined;
   readonly realpath: (path: string) => string;
-  readonly signal: (target: number, signal: NodeJS.Signals) => void;
+  readonly signal: (pid: number, signal: NodeJS.Signals) => void;
   readonly delay: (ms: number) => Promise<void>;
   readonly graceMs: number;
   readonly pollMs: number;
-}
-
-/** `execFileSync` with an absolute binary: no shell, and no PATH lookup a user directory could shadow. */
-function runPsHosts(args: readonly string[]): string {
-  return execFileSync("/bin/ps", args, {
-    encoding: "utf8",
-    timeout: 2_000,
-    maxBuffer: 8 * 1024 * 1024,
-    // lstart is rendered in the current locale and compared across calls, so pin it.
-    env: { ...process.env, LC_ALL: "C", LANG: "C" },
-  });
 }
 
 /** macOS has no `/proc/<pid>/cwd`; lsof prints `p<pid>`, `fcwd`, `n<path>`. */
@@ -84,36 +62,15 @@ function cwdOfHost(pid: number): string | undefined {
   }
 }
 
-function signalHost(target: number, signal: NodeJS.Signals): void {
+function signalHost(pid: number, signal: NodeJS.Signals): void {
   try {
-    process.kill(target, signal);
+    process.kill(pid, signal);
   } catch (error) {
     const code = error instanceof Error && "code" in error ? error.code : undefined;
-    // macOS answers EPERM, not ESRCH, while the group's only member is an unreaped leader.
+    // Gone since the last scan, or not ours to signal: either way nothing was sent.
     if (code === "ESRCH" || code === "EPERM") return;
     throw error;
   }
-}
-
-function parseHosts(output: string): HostRow[] {
-  return output.split("\n").flatMap((line) => {
-    const match = PS_HOST_LINE.exec(line);
-    if (match === null) return [];
-    const pid = Number(match[1]);
-    const group = Number(match[2]);
-    const state = match[3];
-    const start = match[4];
-    if (!Number.isInteger(pid) || !Number.isInteger(group) || state === undefined || start === undefined) return [];
-    return [{ pid, group, state, start, args: match[5] ?? "" }];
-  });
-}
-
-function readHosts(run: (args: readonly string[]) => string): HostRow[] {
-  return parseHosts(run(["-ww", "-o", PS_HOST_COLUMNS, "-A"]));
-}
-
-function readHost(pid: number, run: (args: readonly string[]) => string): HostRow | undefined {
-  return parseHosts(run(["-ww", "-o", PS_HOST_COLUMNS, "-p", String(pid)])).find((row) => row.pid === pid);
 }
 
 function socketName(sessionId: string): string {
@@ -121,32 +78,36 @@ function socketName(sessionId: string): string {
 }
 
 /**
- * The directory this process was started for, when argv names both a supervisor entry point and one
- * of the sockets this connector owns. Tokens are split on whitespace, but the socket file name never
- * contains a space, so a directory with spaces still yields the name as the tail of a token.
+ * The value of `--socket`, as Linux reads it from argv. `ps` joins argv with spaces, so the value runs
+ * to the next ` --` flag (a socket directory may contain spaces). Anything else after it makes the
+ * basename miss every shard, which fails closed.
  */
-function ownedDirectory(args: string, sockets: ReadonlyMap<string, string>): string | undefined {
+function socketArgument(args: string): string | undefined {
+  const match = /(?:^|\s)--socket\s+(.+?)(?=\s--|$)/.exec(args);
+  return match?.[1] === undefined ? undefined : basename(match[1].trimEnd());
+}
+
+function isSupervisor(args: string): boolean {
   const tokens = args.split(/\s+/);
-  const supervisor =
-    tokens.includes("--internal-rpc-host-supervisor") || tokens.some((token) => token.endsWith("/host-lifecycle.js"));
-  if (!supervisor) return undefined;
-  for (const token of tokens) {
-    const directory = sockets.get(basename(token));
-    if (directory !== undefined) return directory;
-  }
-  return undefined;
+  return (
+    tokens.includes("--internal-rpc-host-supervisor") || tokens.some((token) => token.endsWith("/host-lifecycle.js"))
+  );
 }
 
 /**
- * macOS teardown without pidfd: a group is claimed only while its leader (pid == pgid) still carries
- * the recorded start time, which is the same rule `pi-rpc.dispose()` uses before the leader exits.
- * Ownership is the parent-session shard, the supervisor entry point and the working directory.
+ * macOS teardown without pidfd. Ownership is the Linux rule: a live group leader whose argv names the
+ * supervisor entry point and, as its `--socket` value, the shard of a session this connector created,
+ * and whose working directory is that session's directory. Every member of an owned group is recorded
+ * with its start time in the same scan, and each later signal goes to one PID only after a fresh scan
+ * still shows the same group and start time. Members are tracked individually, so a child that outlives
+ * its supervisor is still stopped. A PID can be recycled between that scan and the signal; the window
+ * is the same one `PiRpcClient.dispose()` accepts.
  */
 export function createDarwinHostStopper(
   overrides: Partial<DarwinHostDependencies> = {},
 ): (created: ReadonlyMap<string, string>) => Promise<void> {
   const deps: DarwinHostDependencies = {
-    run: overrides.run ?? runPsHosts,
+    run: overrides.run ?? runPs,
     cwdOf: overrides.cwdOf ?? cwdOfHost,
     realpath: overrides.realpath ?? realpathSync,
     signal: overrides.signal ?? signalHost,
@@ -154,72 +115,46 @@ export function createDarwinHostStopper(
     graceMs: overrides.graceMs ?? HOST_TERM_GRACE_MS,
     pollMs: overrides.pollMs ?? HOST_POLL_MS,
   };
-  let warned = false;
   return async (created) => {
     if (created.size === 0) return;
     const sockets = new Map([...created].map(([id, directory]) => [socketName(id), directory]));
-    let rows: HostRow[];
-    try {
-      rows = readHosts(deps.run);
-    } catch {
-      return;
-    }
-    const owned = new Map<number, string>();
-    for (const row of rows) {
-      if (row.state.startsWith("Z") || row.group !== row.pid) continue;
-      const directory = ownedDirectory(row.args, sockets);
+    const processes = listDarwinProcesses(deps.run);
+    const groups = new Set<number>();
+    for (const row of processes) {
+      if (row.group !== row.pid || !isSupervisor(row.args)) continue;
+      const socket = socketArgument(row.args);
+      const directory = socket === undefined ? undefined : sockets.get(socket);
       if (directory === undefined) continue;
       const cwd = deps.cwdOf(row.pid);
       if (cwd === undefined) continue;
+      let expected: string;
       try {
-        if (cwd !== deps.realpath(directory)) continue;
+        expected = deps.realpath(directory);
       } catch {
         continue;
       }
-      owned.set(row.pid, row.start);
+      if (cwd === expected) groups.add(row.group);
     }
-    if (owned.size === 0) return;
+    const members = processes.filter((row) => groups.has(row.group));
+    if (members.length === 0) return;
 
-    const stillOurs = (group: number): boolean => {
-      try {
-        const row = readHost(group, deps.run);
-        return (
-          row !== undefined &&
-          row.pid === group &&
-          row.group === group &&
-          !row.state.startsWith("Z") &&
-          row.start === owned.get(group)
-        );
-      } catch {
-        return false;
-      }
+    const survivors = (): number[] => {
+      const now = new Map(listDarwinProcesses(deps.run).map((row) => [row.pid, row]));
+      return members
+        .filter((member) => {
+          const row = now.get(member.pid);
+          return row !== undefined && row.group === member.group && row.start === member.start;
+        })
+        .map((member) => member.pid);
     };
-
-    for (const group of owned.keys()) if (stillOurs(group)) deps.signal(-group, "SIGTERM");
-
-    for (let waited = 0; waited < deps.graceMs && owned.size > 0; waited += deps.pollMs) {
-      await deps.delay(deps.pollMs);
-      let remaining: HostRow[];
-      try {
-        remaining = readHosts(deps.run);
-      } catch {
-        break;
+    for (const signal of ["SIGTERM", "SIGKILL"] as const) {
+      for (const pid of survivors()) deps.signal(pid, signal);
+      for (let waited = 0; waited < deps.graceMs; waited += deps.pollMs) {
+        await deps.delay(deps.pollMs);
+        if (survivors().length === 0) return;
       }
-      const alive = new Set(remaining.filter((row) => !row.state.startsWith("Z")).map((row) => row.group));
-      for (const group of [...owned.keys()]) if (!alive.has(group)) owned.delete(group);
     }
-
-    let unconfirmed = 0;
-    for (const group of owned.keys()) {
-      if (stillOurs(group)) deps.signal(-group, "SIGKILL");
-      else unconfirmed++;
-    }
-    if (unconfirmed > 0 && !warned) {
-      warned = true;
-      console.warn(
-        "Private OmO host teardown on macOS left a surviving group alone: its leader exited, so ownership could not be re-confirmed and nothing was signalled.",
-      );
-    }
+    throw new Error(`private OmO hosts survived shutdown: ${survivors().join(", ")}`);
   };
 }
 
